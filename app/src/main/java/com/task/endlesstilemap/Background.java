@@ -4,21 +4,20 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Point;
+import android.graphics.PorterDuff;
 import android.graphics.Rect;
 import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Display;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
-import android.view.View;
+import android.view.SurfaceHolder;
+import android.view.SurfaceView;
 
-public class Background extends View  {
+public class Background extends SurfaceView implements SurfaceHolder.Callback {
     private static final int INVALID_POINTER_ID = -1;
 
-    private Drawable mImage;
-    private Bitmap mBitmap;
     private BitmapDrawable mDrawable;
     private float mPosX;
     private float mPosY;
@@ -30,23 +29,141 @@ public class Background extends View  {
     private ScaleGestureDetector mScaleDetector;
     private float mScaleFactor = 1.f;
 
+    private DrawThread drawThread;
+
     public Background(Context context) {
         this(context, null, 0);
-        //mBitmap = loadBitmap();
-        mDrawable = new BitmapDrawable(context.getResources(), mBitmap);
         mDrawable = (BitmapDrawable) getResources().getDrawable(R.drawable.tile_single);
-        mDrawable.setBounds(0, 0, mDrawable.getIntrinsicWidth(), mDrawable.getIntrinsicHeight());
-        //mImage = getResources().getDrawable(R.drawable.tilemap);
-        //mImage.setBounds(0, 0, mImage.getIntrinsicWidth(), mImage.getIntrinsicHeight());
+        SurfaceHolder holder = getHolder();
+        getHolder().addCallback(this);
+        drawThread = new DrawThread(holder);
     }
 
     public Background(Context context, AttributeSet attrs) {
         this(context, attrs, 0);
+//        SurfaceHolder holder = getHolder();
+//        getHolder().addCallback(this);
+//        mDrawable = (BitmapDrawable) getResources().getDrawable(R.drawable.tile_single);
+//        mDrawable.setBounds(0, 0, mDrawable.getIntrinsicWidth(), mDrawable.getIntrinsicHeight());
+//        drawThread = new DrawThread(holder);
     }
 
     public Background(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
         mScaleDetector = new ScaleGestureDetector(context, new ScaleListener());
+    }
+
+    @Override
+    public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+
+    }
+
+    @Override
+    public void surfaceCreated(SurfaceHolder holder) {
+        drawThread = new DrawThread(getHolder());
+        drawThread.setRunning(true);
+        drawThread.start();
+    }
+
+    @Override
+    public void surfaceDestroyed(SurfaceHolder holder) {
+        boolean retry = true;
+        drawThread.setRunning(false);
+        while (retry) {
+            try {
+                drawThread.join();
+                retry = false;
+            } catch (InterruptedException e) {
+            }
+        }
+    }
+
+    class DrawThread extends Thread {
+
+        private boolean running = false;
+        private SurfaceHolder surfaceHolder;
+
+        public DrawThread(SurfaceHolder surfaceHolder) {
+            this.surfaceHolder = surfaceHolder;
+        }
+
+        public void setRunning(boolean running) {
+            this.running = running;
+        }
+
+        @Override
+        public void run() {
+            Canvas canvas;
+            while (running) {
+                canvas = null;
+                try {
+                    canvas = surfaceHolder.lockCanvas(null);
+                    if (canvas == null)
+                        continue;
+                    synchronized (surfaceHolder) {
+                        canvas.drawColor(0, PorterDuff.Mode.CLEAR);
+                        draw(canvas);
+                    }
+                } finally {
+                    if (canvas != null) {
+                        surfaceHolder.unlockCanvasAndPost(canvas);
+                    }
+                }
+            }
+        }
+
+        public void draw(Canvas canvas) {
+            Display display = getDisplay();
+            Point size = new Point();
+            display.getSize(size);
+            int displayX = size.x;
+            int displayY = size.y;
+            mDrawable.setBounds(0, 0, displayX, displayY);
+            Bitmap resizedBitmap = Bitmap.createScaledBitmap(mDrawable.getBitmap(), displayX, displayY, false);
+            //canvas.save();
+            Log.d("DEBUG", "X: " + mPosX + " Y: " + mPosY);
+            Rect rect = mDrawable.getBounds();
+            int tileX = rect.width();
+            int tileY = rect.height();
+            //Rect rect = mImage.getBounds();
+            Log.d("myDEBUG", "tileX: " + String.valueOf(tileX) + " tileY: " + String.valueOf(tileY));
+            Log.d("myDEBUG", "LastTouchX: " + mLastTouchX + " mLastTouchY: " + mLastTouchY);
+            Log.d("displayCoordinates", "displayX: " + displayX + " displayY: " + displayY);
+
+            int i = 1;
+            int j = 1;
+
+            if (mPosX <= displayX && mPosY <= displayY) {
+                i = -1;
+                j = -1;
+            }
+
+            if (mPosX > displayX && mPosY > displayY) {
+                i = 1;
+                j = 1;
+            }
+
+            if (mPosX <= displayX && mPosY >= displayY) {
+                i = -1;
+                j = 1;
+            }
+
+            if (mPosX > displayX && mPosY < displayY) {
+                i = 1;
+                j = -1;
+            }
+
+            for (float startX = i*displayX; startX <= displayX + i*mPosX; startX += displayX) {
+                for (float startY = j*displayY; startY <= displayY + j*mPosY; startY += displayY) {
+                    canvas.save();
+                    canvas.scale(mScaleFactor, mScaleFactor);
+                    canvas.drawBitmap(resizedBitmap, mPosX - i*startX, mPosY - j*startY, null);
+                    canvas.restore();
+                }
+            }
+
+
+        }
     }
 
     @Override
@@ -79,7 +196,7 @@ public class Background extends View  {
                     mPosX += dx;
                     mPosY += dy;
 
-                    invalidate();
+                    //invalidate();
                 }
 
                 mLastTouchX = x;
@@ -117,111 +234,6 @@ public class Background extends View  {
         return true;
     }
 
-    @Override
-    public void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-
-        Display display = getDisplay();
-        Point size = new Point();
-        display.getSize(size);
-        int displayX = size.x;
-        int displayY = size.y;
-
-        //canvas.save();
-        Log.d("DEBUG", "X: " + mPosX + " Y: " + mPosY);
-        Rect rect = mDrawable.getBounds();
-        int tileX = rect.width();
-        int tileY = rect.height();
-        //Rect rect = mImage.getBounds();
-        Log.d("myDEBUG", "tileX: " + String.valueOf(tileX) + " tileY: " + String.valueOf(tileY));
-        Log.d("myDEBUG", "LastTouchX: " + mLastTouchX + " mLastTouchY: " + mLastTouchY);
-        Log.d("displayCoordinates", "displayX: " + displayX + " displayY: " + displayY);
-        //if (mPosX <= 0 && mPosY <=0) {
-            for (int startX = 0; startX < displayX - mPosX; startX += tileX) {
-                for (int startY = 0; startY < displayY - mPosY; startY += tileY) {
-                    canvas.save();
-                    canvas.translate(mPosX + startX, mPosY + startY);
-                    mDrawable.draw(canvas);
-                    canvas.restore();
-                }
-            }
-        //}
-
-        //if (mPosX >= 0 && mPosY >=0) {
-            for (int startX = 0; startX < displayX + mPosX; startX += tileX) {
-                for (int startY = 0; startY < displayY + mPosY; startY += tileY) {
-                    canvas.save();
-                    canvas.translate(mPosX - startX, mPosY - startY);
-                    mDrawable.draw(canvas);
-                    canvas.restore();
-                }
-            }
-        //}
-
-//            int startX = 0;
-//            int startY = 0;
-//            while (startX < displayX - mPosX || startY < displayY - mPosY) {
-//                int plusTileY = 0;
-//                int plusTileX = 0;
-//                while (startX < displayX - mPosX) {
-//                    canvas.save();
-//                    canvas.translate(mPosX + startX, mPosY);
-//                    mDrawable.draw(canvas);
-//                    canvas.restore();
-//                    canvas.save();
-//                    canvas.translate(mPosX + startX, mPosY + plusTileY);
-//                    mDrawable.draw(canvas);
-//                    canvas.restore();
-//                    startX += tileX;
-//                    plusTileY += tileY;
-//                }
-//                while (startY < displayY - mPosY) {
-//                    canvas.save();
-//                    canvas.translate(mPosX, mPosY + startY);
-//                    mDrawable.draw(canvas);
-//                    canvas.restore();
-//                    canvas.save();
-//                    canvas.translate(mPosX + plusTileX, mPosY + startY);
-//                    mDrawable.draw(canvas);
-//                    canvas.restore();
-//                    startY += tileY;
-//                    plusTileX +=tileX;
-//                }
-//            }
-
-
-        if (mPosX > 0 && mPosY > 0) {
-            int startX = 0;
-            int startY = 0;
-            while (startX > displayX - mPosX || startY < mPosY - displayY) {
-                if (startX < mPosX - displayX) {
-                    canvas.save();
-                    canvas.translate(mPosX + startX, mPosY);
-                    mDrawable.draw(canvas);
-                    canvas.restore();
-                    startX += rect.width();
-                }
-                if (startY < mPosY - displayX) {
-                    canvas.save();
-                    canvas.translate(mPosX, mPosY + startY);
-                    mDrawable.draw(canvas);
-                    canvas.restore();
-                    startY += rect.height();
-                }
-            }
-        }
-
-//        canvas.translate(mPosX, mPosY);
-//        //canvas.scale(mScaleFactor, mScaleFactor);
-//        mDrawable.draw(canvas);
-//        canvas.restore();
-//
-//        canvas.save();
-//        canvas.translate(mPosX, mPosY + rect.centerY()*2);
-//        //canvas.scale(mScaleFactor, mScaleFactor);
-//        mDrawable.draw(canvas);
-//        canvas.restore();
-    }
 
     private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
         @Override
@@ -229,9 +241,9 @@ public class Background extends View  {
             mScaleFactor *= detector.getScaleFactor();
 
             // Don't let the object get too small or too large.
-            //mScaleFactor = Math.max(0.1f, Math.min(mScaleFactor, 10.0f));
+            mScaleFactor = Math.max(1.0f, Math.min(mScaleFactor, 10.0f));
 
-            invalidate();
+            //invalidate();
             return true;
         }
     }

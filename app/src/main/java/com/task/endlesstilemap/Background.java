@@ -14,20 +14,29 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
 
-public class Background extends View {
-    private static final int INVALID_POINTER_ID = -1;
+import static android.view.MotionEvent.INVALID_POINTER_ID;
 
+public class Background extends View {
+
+    //Object for tile map
     private BitmapDrawable mDrawable;
+
+    //Coordinates of the map camera
     private float mPosX;
     private float mPosY;
 
+    //Width and height of tile map
     private float tileWidth;
     private float tileHeight;
 
+    //Coordinates of the last touch of the screen
     private float mLastTouchX;
     private float mLastTouchY;
+
+    // The ‘active pointer’ is the one currently moving our object.
     private int mActivePointerId = INVALID_POINTER_ID;
 
+    //Width and height of display
     private int displayX;
     private int displayY;
 
@@ -35,10 +44,9 @@ public class Background extends View {
     private float mScaleFactor = 1.f;
 
     private Matrix mImageMatrix = new Matrix();
-    /* Last Rotation Angle */
+
+    //Last rotation angle
     private int mLastAngle = 0;
-    private int degrees = 0;
-    private int angle = 0;
 
     public Background(Context context) {
         this(context, null, 0);
@@ -55,7 +63,7 @@ public class Background extends View {
     }
 
     /**
-     * Implement this to do your drawing.
+     * Method of tiled map rendering.
      *
      * @param canvas the canvas on which the background will be drawn
      */
@@ -63,6 +71,7 @@ public class Background extends View {
     @Override
     public void draw(Canvas canvas) {
         float scale;
+        int angle = 1;
         Display display = getDisplay();
         Point size = new Point();
         display.getSize(size);
@@ -70,19 +79,24 @@ public class Background extends View {
         displayY = size.y;
         mDrawable.setBounds(0, 0, displayX, displayY);
         Bitmap resizedBitmap = Bitmap.createScaledBitmap(mDrawable.getBitmap(), displayX, displayY, false);
-        Rect rect = mDrawable.getBounds();
-        tileWidth = rect.width();
-        tileHeight = rect.height();
+        tileWidth = resizedBitmap.getWidth();
+        tileHeight = resizedBitmap.getHeight();
         Log.d("DEBUG", "X: " + mPosX + " Y: " + mPosY);
         Log.d("myDEBUG", "tileX: " + tileWidth + " tileY: " + tileHeight);
         Log.d("myDEBUG", "LastTouchX: " + mLastTouchX + " mLastTouchY: " + mLastTouchY);
         Log.d("displayCoordinates", "displayX: " + displayX + " displayY: " + displayY);
         Log.d("mScaleFactor", ": " + mScaleFactor);
 
+        //Coefficients for different quadrants
         int i = 1;
         int j = 1;
 
-        if (mPosX <= displayX && mPosY <= displayY) {
+        if (mPosX >= displayX && mPosY >= displayY) {
+            i = 1;
+            j = 1;
+        }
+
+        if (mPosX < displayX && mPosY < displayY) {
             i = -1;
             j = -1;
         }
@@ -92,31 +106,31 @@ public class Background extends View {
             j = 1;
         }
 
-        if (mPosX > displayX && mPosY > displayY) {
-            i = 1;
-            j = 1;
-        }
-
         if (mPosX > displayX && mPosY < displayY) {
             i = 1;
             j = -1;
         }
 
+        //The amount of tiles is changed if the scale changes
         if (mScaleFactor <= 1) {
-             scale = mScaleFactor*mScaleFactor;
+            scale = mScaleFactor*mScaleFactor;
         } else {
-            scale = 1/mScaleFactor;
+            scale = 1/mScaleFactor/mScaleFactor;
         }
 
+        //Width and height of tiled map are changed when screen is rotating
+        if (mLastAngle != 0) {
+            angle = 2;
+        }
 
-        for (float startX = -tileWidth/scale; startX <= 2*tileWidth/scale + i*mPosX; startX += tileWidth) {
-            for (float startY = -tileHeight/scale; startY <= 2*tileHeight/scale + j*mPosY; startY += tileHeight) {
+        //Tiled map rendering with provision for scale and rotation
+        for (float startX = -tileWidth/scale; startX <= angle*tileWidth/scale + i*mPosX; startX += tileWidth) {
+            for (float startY = -tileHeight/scale; startY <= angle*tileHeight/scale + j*mPosY; startY += tileHeight) {
                 canvas.save();
                 canvas.setMatrix(mImageMatrix);
                 canvas.scale(mScaleFactor, mScaleFactor);
                 canvas.drawBitmap(resizedBitmap, mPosX - i*startX, mPosY - j*startY, null);
                 canvas.restore();
-                //mImageMatrix.reset();
             }
         }
     }
@@ -161,13 +175,8 @@ public class Background extends View {
                     final float dx = x - mLastTouchX;
                     final float dy = y - mLastTouchY;
 
-                    if (degrees != 0) {
-                        mPosX += dx/mScaleFactor * Math.cos(angle);
-                        mPosY += dy/mScaleFactor * Math.sin(angle);
-                    } else {
-                        mPosX += dx/mScaleFactor;
-                        mPosY += dy/mScaleFactor;
-                    }
+                    mPosX += dx/mScaleFactor;// * Math.cos(degrees);
+                    mPosY += dy/mScaleFactor;// * Math.sin(degrees);
 
                     invalidate();
                 }
@@ -176,26 +185,6 @@ public class Background extends View {
                 mLastTouchY = y;
                 if (ev.getPointerCount() >= 2) {
                     doRotationEvent(ev);
-//                    //Calculate the angle between the two fingers
-//                    float deltaX = ev.getX(0) - ev.getX(1);
-//                    float deltaY = ev.getY(0) - ev.getY(1);
-//                    double radians = Math.atan(deltaY / deltaX);
-//                    //Convert to degrees
-//                    int degrees = (int)(radians * 180 / Math.PI);
-//                    if ((degrees - mLastAngle) > 45) {
-//                        //Going CCW across the boundary
-//                        mImageMatrix.postRotate(-5, tileWeight / 2, tileHeight / 2);
-//                    } else if ((degrees - mLastAngle) < -45) {
-//                        //Going CW across the boundary
-//                        mImageMatrix.postRotate(5, tileWeight / 2, tileHeight / 2);
-//                    } else {
-//                        //Normal rotation, rotate the difference
-//                        mImageMatrix.postRotate(degrees - mLastAngle, tileWeight / 2, tileHeight / 2);
-//                    }
-//                    //Post the rotation to the image
-//
-//                    //Save the current angle
-//                    mLastAngle = degrees;
                }
                 break;
             }
@@ -229,10 +218,15 @@ public class Background extends View {
         return true;
     }
 
+    /**
+     * A class to listen for a subset of scaling-related events.
+     */
 
     private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
         @Override
         public boolean onScale(ScaleGestureDetector detector) {
+            // ScaleGestureDetector calculates a scale factor based on whether
+            // the fingers are moving apart or together
             mScaleFactor *= detector.getScaleFactor();
 
             // Don't let the object get too small or too large.
@@ -243,6 +237,16 @@ public class Background extends View {
         }
     }
 
+    /**
+     * Operate on two-finger events to rotate the image.
+     * This method calculates the change in angle between the
+     * pointers and rotates the image accordingly.  As the user
+     * rotates their fingers, the image will follow.
+     *
+     * @param event The motion event.
+     *
+     */
+
     private void doRotationEvent(MotionEvent event) {
         //Calculate the angle between the two fingers
         float deltaX = event.getX(0) - event.getX(1);
@@ -250,43 +254,27 @@ public class Background extends View {
         double radians = Math.atan(deltaY / deltaX);
         Log.d("radians", ": " + radians);
         //Convert to degrees
-        degrees = (int)(radians * 180 / Math.PI);
-        Log.d("Degrees1111111111 ", ": " + degrees);
-        /*
-         * Must use getActionMasked() for switching to pick up pointer events.
-         * These events have the pointer index encoded in them so the return
-         * from getAction() won't match the exact action constant.
-         */
-        switch (event.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN:
-            case MotionEvent.ACTION_POINTER_DOWN:
-            case MotionEvent.ACTION_POINTER_UP:
-                //Mark the initial angle
-                mLastAngle = degrees;
-                break;
-            case MotionEvent.ACTION_MOVE:
-                // ATAN returns a converted value between -90deg and +90deg
-                // which creates a point when two fingers are vertical where the
-                // angle flips sign.  We handle this case by rotating a small amount
-                // (5 degrees) in the direction we were traveling
-                Log.d("Angle", ": " + mLastAngle);
-                Log.d("Degrees ", ": " + degrees);
-                angle = degrees - mLastAngle;
-                if ((degrees - mLastAngle) > 45) {
-                    //Going CCW across the boundary
-                    mImageMatrix.postRotate(-5, tileWidth / 2, tileHeight / 2);
-                } else if ((degrees - mLastAngle) < -45) {
-                    //Going CW across the boundary
-                    mImageMatrix.postRotate(5, tileWidth / 2, tileHeight / 2);
-                } else {
-                    //Normal rotation, rotate the difference
-                    mImageMatrix.postRotate(degrees - mLastAngle, tileWidth / 2, tileHeight / 2);
-                }
-                //Post the rotation to the image
+        int degrees = (int)(radians * 180 / Math.PI);
+        Log.d("Degrees ", ": " + degrees);
 
-                //Save the current angle
-                mLastAngle = degrees;
-                break;
+        // Returns a converted value between -90deg and +90deg
+        // which creates a point when two fingers are vertical where the
+        // angle flips sign.  We handle this case by rotating a small amount
+        // (5 degrees) in the direction we were traveling
+        Log.d("Angle", ": " + mLastAngle);
+        Log.d("Degrees ", ": " + degrees);
+        if ((degrees - mLastAngle) > 45) {
+            //Going CCW across the boundary
+            mImageMatrix.postRotate(-5, tileWidth / 2, tileHeight / 2);
+        } else if ((degrees - mLastAngle) < -45) {
+            //Going CW across the boundary
+            mImageMatrix.postRotate(5, tileWidth / 2, tileHeight / 2);
+        } else {
+            //Normal rotation, rotate the difference
+            mImageMatrix.postRotate(degrees - mLastAngle, tileWidth / 2, tileHeight / 2);
         }
+
+        //Save the current angle
+        mLastAngle = degrees;
     }
 }

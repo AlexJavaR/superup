@@ -188,11 +188,11 @@ public class Background extends View {
                     mPosX += dx / mScaleFactor;// * Math.cos(mLastAngle + Math.atan2(tileHeight, tileWidth));
                     mPosY += dy / mScaleFactor;// * Math.sin(mLastAngle + Math.atan2(tileHeight, tileWidth));
 
-                    if (ev.getPointerCount() >= 2) {
-                        doRotationEvent(ev);
-                    }
-
                     invalidate();
+                }
+
+                if (ev.getPointerCount() >= 2) {
+                    doRotationEvent(ev);
                 }
 
                 mLastTouchX = x;

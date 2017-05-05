@@ -31,6 +31,9 @@ public class Background extends View {
     private float mLastTouchX;
     private float mLastTouchY;
 
+    private float lastFocusX;
+    private float lastFocusY;
+
     // The ‘active pointer’ is the one currently moving our object.
     private int mActivePointerId = INVALID_POINTER_ID;
 
@@ -41,6 +44,8 @@ public class Background extends View {
 
     private ScaleGestureDetector mScaleDetector;
     private float mScaleFactor = 1.f;
+    private float mScaleMin = 0.2f;
+    private float mScaleMax = 5.0f;
 
     private Matrix mImageMatrix = new Matrix();
 
@@ -90,7 +95,6 @@ public class Background extends View {
 
     @Override
     public void draw(Canvas canvas) {
-        float scale;
         Display display = getDisplay();
         Point size = new Point();
         display.getSize(size);
@@ -127,19 +131,12 @@ public class Background extends View {
             j = -1;
         }
 
-        //The amount of tiles is changed if the scale changes
-        if (mScaleFactor <= 1) {
-            scale = mScaleFactor;
-        } else {
-            scale = 1/mScaleFactor;
-        }
-
         //Tiled map rendering with provision for scale and rotation
-        for (float startX = -tileWidth/scale; startX <= diagonalScreen/scale + i*mPosX; startX += tileWidth) {
-            for (float startY = -tileHeight/scale; startY <= diagonalScreen/scale + j*mPosY; startY += tileHeight) {
+        for (float startX = -tileWidth/mScaleMin; startX <= tileWidth/mScaleMin + i*mPosX; startX += tileWidth) {
+            for (float startY = -tileHeight/mScaleMin; startY <= tileHeight/mScaleMin + j*mPosY; startY += tileHeight) {
                 canvas.save();
-                canvas.setMatrix(mImageMatrix);
-                canvas.scale(mScaleFactor, mScaleFactor);
+                //canvas.setMatrix(mImageMatrix);
+                canvas.scale(mScaleFactor, mScaleFactor, lastFocusX, lastFocusY);
                 canvas.drawBitmap(bitmap, mPosX - i*startX, mPosY - j*startY, null);
                 canvas.restore();
             }
@@ -192,7 +189,7 @@ public class Background extends View {
                 }
 
                 if (ev.getPointerCount() >= 2) {
-                    doRotationEvent(ev);
+                    //doRotationEvent(ev);
                 }
 
                 mLastTouchX = x;
@@ -236,13 +233,19 @@ public class Background extends View {
 
     private class ScaleListener extends ScaleGestureDetector.SimpleOnScaleGestureListener {
         @Override
+        public boolean onScaleBegin(ScaleGestureDetector detector) {
+            lastFocusX = detector.getFocusX();
+            lastFocusY = detector.getFocusY();
+            return true;
+        }
+        @Override
         public boolean onScale(ScaleGestureDetector detector) {
             // ScaleGestureDetector calculates a scale factor based on whether
             // the fingers are moving apart or together
             mScaleFactor *= detector.getScaleFactor();
 
             // Don't let the object get too small or too large.
-            mScaleFactor = Math.max(0.2f, Math.min(mScaleFactor, 2.0f));
+            mScaleFactor = Math.max(mScaleMin, Math.min(mScaleFactor, mScaleMax));
 
             invalidate();
             return true;

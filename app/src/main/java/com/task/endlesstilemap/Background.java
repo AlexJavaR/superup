@@ -8,9 +8,11 @@ import android.graphics.Point;
 import android.util.AttributeSet;
 import android.util.Log;
 import android.view.Display;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.view.View;
+import android.widget.Scroller;
 
 import static android.view.MotionEvent.INVALID_POINTER_ID;
 
@@ -24,8 +26,8 @@ public class Background extends View {
     private float mPosY;
 
     //Width and height of tile map
-    private float tileWidth;
-    private float tileHeight;
+    private int tileWidth;
+    private int tileHeight;
 
     //Coordinates of the last touch of the screen
     private float mLastTouchX;
@@ -42,7 +44,9 @@ public class Background extends View {
     private int displayY;
     private float diagonalScreen;
 
+    private Scroller mScroller;
     private ScaleGestureDetector mScaleDetector;
+    private GestureDetector mDetector;
     private float mScaleFactor = 1.f;
     private float mScaleMin = 0.2f;
     private float mScaleMax = 5.0f;
@@ -51,6 +55,7 @@ public class Background extends View {
 
     //Last rotation angle
     private int mLastAngle = 0;
+    private int angle;
 
     Bitmap bitmap;
 
@@ -71,6 +76,8 @@ public class Background extends View {
     public Background(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
         mScaleDetector = new ScaleGestureDetector(context, new ScaleListener());
+        mDetector = new GestureDetector(context, new ScrollListener());
+        mScroller = new Scroller(context);
     }
 
     //create Bitmap from array tiles
@@ -95,6 +102,7 @@ public class Background extends View {
 
     @Override
     public void draw(Canvas canvas) {
+        float scale = 1;
         Display display = getDisplay();
         Point size = new Point();
         display.getSize(size);
@@ -102,10 +110,10 @@ public class Background extends View {
         displayY = size.y;
         tileWidth = bitmap.getWidth();
         tileHeight = bitmap.getHeight();
-        Log.d("myDEBUG", "X: " + mPosX + " Y: " + mPosY);
-        Log.d("myDEBUG", "tileX: " + tileWidth + " tileY: " + tileHeight);
-        Log.d("myDEBUG", "displayX: " + displayX + " displayY: " + displayY);
-        Log.d("myDEBUG", "mScaleFactor: " + mScaleFactor);
+//        Log.d("myDEBUG", "X: " + mPosX + " Y: " + mPosY);
+//        Log.d("myDEBUG", "tileX: " + tileWidth + " tileY: " + tileHeight);
+//        Log.d("myDEBUG", "displayX: " + displayX + " displayY: " + displayY);
+//        Log.d("myDEBUG", "mScaleFactor: " + mScaleFactor);
 
         //Coefficients for different quadrants
         int i = 1;
@@ -131,11 +139,15 @@ public class Background extends View {
             j = -1;
         }
 
+        if (mScaleFactor < 1) {
+            scale = mScaleMin;
+        }
+
         //Tiled map rendering with provision for scale and rotation
-        for (float startX = -tileWidth/mScaleMin; startX <= tileWidth/mScaleMin + i*mPosX; startX += tileWidth) {
-            for (float startY = -tileHeight/mScaleMin; startY <= tileHeight/mScaleMin + j*mPosY; startY += tileHeight) {
+        for (float startX = -displayX/scale; startX <= displayX/scale + i*mPosX; startX += tileWidth) {
+            for (float startY = -displayY/scale; startY <= displayY/scale + j*mPosY; startY += tileHeight) {
                 canvas.save();
-                //canvas.setMatrix(mImageMatrix);
+                canvas.setMatrix(mImageMatrix);
                 canvas.scale(mScaleFactor, mScaleFactor, lastFocusX, lastFocusY);
                 canvas.drawBitmap(bitmap, mPosX - i*startX, mPosY - j*startY, null);
                 canvas.restore();
@@ -199,6 +211,7 @@ public class Background extends View {
             }
 
             case MotionEvent.ACTION_UP: {
+                mScroller.forceFinished(true);
                 mActivePointerId = INVALID_POINTER_ID;
                 break;
             }
@@ -252,6 +265,13 @@ public class Background extends View {
         }
     }
 
+    class ScrollListener extends GestureDetector.SimpleOnGestureListener {
+        @Override
+        public boolean onDown(MotionEvent e) {
+            return true;
+        }
+    }
+
     /**
      * Operate on two-finger events to rotate the image.
      * This method calculates the change in angle between the
@@ -285,6 +305,7 @@ public class Background extends View {
         } else {
             //Normal rotation, rotate the difference
             mImageMatrix.postRotate(degrees - mLastAngle, displayX / 2, displayY / 2);
+            angle = degrees - mLastAngle;
         }
 
         //Save the current angle

@@ -102,7 +102,6 @@ public class Background extends View {
 
     @Override
     public void draw(Canvas canvas) {
-        float scale = 1;
         Display display = getDisplay();
         Point size = new Point();
         display.getSize(size);
@@ -139,13 +138,9 @@ public class Background extends View {
             j = -1;
         }
 
-        if (mScaleFactor < 1) {
-            scale = mScaleMin;
-        }
-
         //Tiled map rendering with provision for scale and rotation
-        for (float startX = -displayX/scale; startX <= displayX/scale + i*mPosX; startX += tileWidth) {
-            for (float startY = -displayY/scale; startY <= displayY/scale + j*mPosY; startY += tileHeight) {
+        for (float startX = -displayX/mScaleMin; startX <= displayX/mScaleMin + i*mPosX; startX += tileWidth) {
+            for (float startY = -displayY/mScaleMin; startY <= displayY/mScaleMin + j*mPosY; startY += tileHeight) {
                 canvas.save();
                 canvas.setMatrix(mImageMatrix);
                 canvas.scale(mScaleFactor, mScaleFactor, lastFocusX, lastFocusY);
@@ -265,7 +260,7 @@ public class Background extends View {
         }
     }
 
-    class ScrollListener extends GestureDetector.SimpleOnGestureListener {
+    private class ScrollListener extends GestureDetector.SimpleOnGestureListener {
         @Override
         public boolean onDown(MotionEvent e) {
             return true;
